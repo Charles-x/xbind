@@ -4,7 +4,7 @@ EXPOSE 53 53/udp
 RUN apk --update add bind python py-pip supervisor
 RUN pip install flask dnspython
 COPY supervisor/supervisord.conf /etc/supervisord.conf
-
+COPY xbind /xbind
 RUN mkdir -m 0755 -p /var/run/named && chown -R root:named /var/run/named
 
 # /var/cache/bind needs to be owned by "bind"
