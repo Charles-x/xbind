@@ -63,7 +63,7 @@ class xbinddns(object):
 class xbindlocal:
     @staticmethod
     def zoneparse(file = "/etc/bind/named.conf.local"):
-        rzone = re.compile(r'.*zone "(\w*\.\w*|\d{1,3}\.\d{1,3}\.in-addr.arpa)"\s.*?{\s*?type (\w*);\s.*?file "(.*)";\s*?allow-update \{ key(.*); \};\s*?\};',re.M)
+        rzone = re.compile(r'.*zone "(\w*\.\w*|\d{1,3}\.\d{1,3}\.in-addr.arpa)"\s.*?{\s*?type (\w*);\s.*?file "(.*)";\s*?allow-update \{ key (.*); \};\s*?\};',re.M)
         with open(file,"r") as zonef:
             data = zonef.read()
             zoneinfo = rzone.findall(data)
@@ -99,8 +99,8 @@ class xbindtool():
 
     @staticmethod
     def choosekey(keyname):
-        keyinfo = xbindlocal.zoneparse()
-        k = filter(lambda kall, z=keyname: z == kall[0], keyinfo)
+        keyinfo = xbindlocal.keyparse()
+        k = filter(lambda kall, k=keyname: k == kall[0], keyinfo)
         return k
 
 
@@ -141,8 +141,9 @@ class xbind():
         self.TTL = TTL
         #verify data
         self.ip = xbindverify.is_ip(ipdata)
+        print "1-----",self.ip
         domainall = xbindverify.is_FQDN(FQDNdata)
-
+        print "2-----",domainall
         #get info for init
 
         ##use zonename get tsig_key_name and tsig_key
@@ -150,12 +151,12 @@ class xbind():
         self.PTR_domain = xbindtool.ip_PTRname(self.ip)+".in-addr.arpa"
         A_domain_info = xbindtool.choosezone(self.A_domain)
         PTR_domain_info = xbindtool.choosezone(self.PTR_domain)
-        A_domain_keyname = A_domain_info[-1]
-        PTR_domain_keyname = PTR_domain_info[-1]
+        A_domain_keyname = A_domain_info[0][-1]
+        PTR_domain_keyname = PTR_domain_info[0][-1]
 
         ##user keyname get key
-        A_domain_key = xbindtool.choosekey(A_domain_keyname)
-        PTR_domain_key = xbindtool.choosekey(PTR_domain_keyname)
+        A_domain_key = xbindtool.choosekey(A_domain_keyname)[0][-1]
+        PTR_domain_key = xbindtool.choosekey(PTR_domain_keyname)[0][-1]
         if A_domain_key == PTR_domain_key and A_domain_keyname == PTR_domain_keyname:
             self.tsig_key_name = A_domain_keyname ##########
             self.tsig_key = A_domain_key          ##########
@@ -169,25 +170,34 @@ class xbind():
 
         ###zonePRT data
         self.PRTip_d = xbindtool.ip_antitone(self.ip)
-        self.PTRdomain_d = self.hostname + domainall[3]
+        self.PTRdomain_d = "{}.{}".format(self.hostname,domainall[3])
+        print "PTR_domain:    ",self.PTR_domain
+        print "PTRdomain_d:    ",self.PTRdomain_d
 
 
     def init(self,dnsserver = '127.0.0.1'):
         self.dnsserver = dnsserver
         self.zoneA = self.A_domain
-        self.zonePTR = self.PTR_domain
+        print "zone A     ",self.zoneA
+        self.zonePTR = self.PTR_domain+"."
+        print "PTR_domain:   "+self.PTR_domain
         self.keyring = dns.tsigkeyring.from_text({self.tsig_key_name: self.tsig_key})
         self.updateA = dns.update.Update(self.zoneA,keyring=self.keyring)
         self.updatePTR = dns.update.Update(self.zonePTR,keyring=self.keyring)
+        print "dnsserver:   "+self.dnsserver
+        print "zoneA:   "+self.zoneA
+        print "zonePTR:   "+self.zonePTR
+
+
 
     def create(self,record):
         if record =='A':
             self.updateA.add(self.hostname,self.TTL,record,self.ip)
         elif record =='PTR':
-            self.updatePTR.add(self.PRTip_d,self.TTL,record,self.PTR_domain)
+            self.updatePTR.add(self.PRTip_d,self.TTL,record,self.PTRdomain_d)
         elif record =="all":
-            self.updateA.add(self.hostname, self.TTL, record, self.ip)
-            self.updatePTR.add(self.PRTip_d, self.TTL, record, self.PTR_domain)
+            self.updateA.add(self.hostname, self.TTL, "A", self.ip)
+            self.updatePTR.add(self.PRTip_d, self.TTL, "PTR", self.PTRdomain_d)
 
     def delete(self):
         pass
@@ -211,4 +221,11 @@ class xbind():
             response1 = dns.query.tcp(self.updateA, self.dnsserver)
             response2 = dns.query.tcp(self.updatePTR, self.dnsserver)
             return response1,response2
+
+if __name__ == '__main__':
+    bind_handle = xbind()
+    bind_handle.dataget_all("192.192.3.120","xiao3.dtwh.com")
+    bind_handle.init(dnsserver="172.16.137.11")
+    bind_handle.create("all")
+    print bind_handle.commit("all")
 

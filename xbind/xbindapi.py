@@ -3,7 +3,7 @@
 
 from flask import Flask, jsonify,abort,request
 import json
-from xbind import xbinddns
+import xbind
 
 
 ##dtwh.com
@@ -20,9 +20,8 @@ app = Flask(__name__)
 
 @app.route('/dns', methods=['GET','DELETE','POST'])
 def get_tasks():
-    handler = xbinddns(zoneA, zonePTR, dnsserver, tsig_key_name, tsig_key)
+    handler = xbind.xbinddns(zoneA, zonePTR, dnsserver, tsig_key_name, tsig_key)
     if request.method == 'GET':
-        print "get"
         hostname = request.args.get('hostname')
         ip = request.args.get('ip')
         if hostname and ip !=None:
@@ -35,25 +34,28 @@ def get_tasks():
             handler.dns_query(zoneA)
 
     elif request.method == 'POST':
-        print request.get_date
-        print "post"
-        try:
-            rdata = request.get_json()
-            if rdata != None:
-                data = is_json(rdata)
-                ip = data.get("ip", None)
-                FQDN = data.get("FQDN", None)
-                if ip and FQDN:
-                    #TODO:add db to dns server
-                    pass
-                return data
-            else:
-                print "else"
-                edata = {"request": "success", "data": "data type error!", "code": "0"}
-                return json.dumps(edata)
-        except:
-            edata = {"request":"success","data":"data type error!","code":"0"}
+        rdata = request.get_json()
+        if rdata != None:
+            # print json.loads(rdata)
+            # data = xbind.xbindverify.is_json(rdata)
+            data = rdata
+            ip = data.get("ip", None)
+            FQDN = data.get("FQDN", None)
+            if ip and FQDN:
+                handler_dns = xbind.xbind()
+                handler_dns.dataget_all(ip,FQDN)
+                handler_dns.init(dnsserver="172.16.137.11")
+                handler_dns.create("all")
+                result = handler_dns.commit("all")
+                for i in result:
+                    print i
+            sdata = {"request": "success", "data": "ok!", "code": "6"}
+            return json.dumps(sdata)
+        else:
+            print "else"
+            edata = {"request": "success", "data": "data type error!", "code": "0"}
             return json.dumps(edata)
+
 
 
     elif request.method == 'DELETE':
@@ -75,12 +77,7 @@ def get_tasks():
 #             self.jdata = {"request":"success","data":"data type error!","code":self.dataerror}
 #
 #         return self.jdata
-def is_json(json):
-    try:
-        data = json.loads(json)
-    except ValueError:
-        return False
-    return data
+
 
 if __name__ == '__main__':
     app.run(debug=False,host='0.0.0.0',port=53535)
